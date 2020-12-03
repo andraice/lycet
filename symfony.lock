@@ -103,6 +103,9 @@
             "./config/packages/prod/jms_serializer.yaml"
         ]
     },
+    "luecano/numero-a-letras": {
+        "version": "v2.2.0"
+    },
     "mikehaertl/php-shellcommand": {
         "version": "1.6.4"
     },
@@ -236,6 +239,9 @@
             "./src/Controller/.gitignore",
             "./src/Kernel.php"
         ]
+    },
+    "symfony/http-client": {
+        "version": "v5.1.8"
     },
     "symfony/http-client-contracts": {
         "version": "v2.3.1"

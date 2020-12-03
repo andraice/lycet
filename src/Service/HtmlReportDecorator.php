@@ -47,7 +47,7 @@ class HtmlReportDecorator implements ReportInterface
         $template = $this->resolver->getTemplate($document);
 
         $this->htmlReport->setTemplate($template);
-
+        //print $this->htmlReport->render($document, $parameters);
         return $this->htmlReport->render($document, $parameters);
     }
 }

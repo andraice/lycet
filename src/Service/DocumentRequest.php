@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Created by PhpStorm.
  * User: Giansalex
@@ -21,11 +22,15 @@ use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 
+use Symfony\Component\Filesystem\Filesystem;
+
 /**
  * Class DocumentRequest
  */
 class DocumentRequest implements DocumentRequestInterface
 {
+
+    private $filesystem;
     /**
      * @var string
      */
@@ -46,11 +51,12 @@ class DocumentRequest implements DocumentRequestInterface
     public function __construct(
         RequestStack $requestStack,
         RequestParserInterface $parser,
-        ContainerInterface $container)
-    {
+        ContainerInterface $container
+    ) {
         $this->requestStack = $requestStack;
         $this->parser = $parser;
         $this->container = $container;
+        $this->filesystem = new Filesystem();
     }
 
     /**
@@ -70,13 +76,13 @@ class DocumentRequest implements DocumentRequestInterface
      */
     public function send(): Response
     {
-       $document = $this->getDocument();
+        $document = $this->getDocument();
 
         /**@var $errors array */
-//        $errors = $this->validator->validate($document);
-//        if (count($errors)) {
-//            return $this->json($errors, 400);
-//        }
+        //        $errors = $this->validator->validate($document);
+        //        if (count($errors)) {
+        //            return $this->json($errors, 400);
+        //        }
 
         $see = $this->getSee($document->getCompany()->getRuc());
         $result = $see->send($document);
@@ -89,7 +95,7 @@ class DocumentRequest implements DocumentRequestInterface
             'hash' => $this->GetHashFromXml($xml),
             'sunatResponse' => $result
         ];
-
+        
         return $this->json($data);
     }
 
@@ -103,16 +109,16 @@ class DocumentRequest implements DocumentRequestInterface
         $document = $this->getDocument();
 
         /**@var $errors array */
-//        $errors = $this->validator->validate($document);
-//        if (count($errors)) {
-//            return $this->json($errors, 400);
-//        }
+        //        $errors = $this->validator->validate($document);
+        //        if (count($errors)) {
+        //            return $this->json($errors, 400);
+        //        }
 
         $see = $this->getSee($document->getCompany()->getRuc());
 
         $xml  = $see->getXmlSigned($document);
 
-        return $this->file($xml, $document->getName().'.xml', 'text/xml');
+        return $this->file($xml, $document->getName() . '.xml', 'text/xml');
     }
 
     /**
@@ -125,10 +131,10 @@ class DocumentRequest implements DocumentRequestInterface
         $document = $this->getDocument();
 
         /**@var $errors array */
-//        $errors = $this->validator->validate($document);
-//        if (count($errors)) {
-//            return $this->json($errors, 400);
-//        }
+        //        $errors = $this->validator->validate($document);
+        //        if (count($errors)) {
+        //            return $this->json($errors, 400);
+        //        }
 
         $jsonCompanies = $this->getParameter('companies');
 
@@ -142,7 +148,7 @@ class DocumentRequest implements DocumentRequestInterface
         $parameters = [
             'system' => [
                 'logo' => $logo,
-//                'hash' => '',
+                //                'hash' => '',
             ],
             'user' => [
                 'header' => '',
@@ -152,6 +158,7 @@ class DocumentRequest implements DocumentRequestInterface
         $report = $this->getReport();
         $pdf = $report->render($document, $parameters);
 
+        file_put_contents('./pdf/' . $document->getName() . '.pdf', $pdf);
         return $this->file($pdf, $document->getName().'.pdf', 'application/pdf');
     }
 
