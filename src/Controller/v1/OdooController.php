@@ -28,6 +28,9 @@ class OdooController extends AbstractController
   private $client;
   private $CURRENCY;
 
+  private $dmask_json;
+  private $mask_json;
+
   public function __construct(HttpClientInterface $client)
   {
     $this->client = $client;
@@ -36,6 +39,71 @@ class OdooController extends AbstractController
       2 => 'USD',        # Dollars
       3 => 'EUR',        # Euros
     ];
+
+    $this->dmask_json = json_decode('{
+      "unidad": "",
+      "cantidad": 0.0,
+      "codProducto": "",
+      "descripcion": "",
+      "mtoValorUnitario": 0.0,
+      "mtoBaseIgv": 0.0,
+      "porcentajeIgv": 0.0,
+      "igv": 0.0,
+      "tipAfeIgv": "10",
+      "totalImpuestos": 0.0,
+      "mtoPrecioUnitario": 0.0,
+      "mtoValorVenta": 0.0
+    }', true);
+
+    $this->mask_json = json_decode('{
+      "ublVersion": "2.1",
+      "tipoOperacion": "0101",
+      "tipoDoc": "",
+      "serie": "",
+      "correlativo": "",
+      "fechaEmision": "",
+      "client": {
+        "tipoDoc": "",
+        "numDoc": "",
+        "rznSocial": "",
+        "address": {
+          "codigoPais": "PE",
+          "departamento": "LIMA",
+          "provincia": "LIMA",
+          "distrito": "-",
+          "urbanizacion": "-",
+          "direccion": ""
+        }
+      },
+      "company": {
+        "ruc": "20522718786",
+        "razonSocial": "PLACA MASS E.I.R.L.",
+        "nombreComercial": "PLACA MASS",
+        "address": {
+          "ubigueo": "150101",
+          "codigoPais": "PE",
+          "departamento": "LIMA",
+          "provincia": "LIMA",
+          "distrito": "SAN MARTIN DE PORRES",
+          "urbanizacion": "-",
+          "direccion": "Cal. 8 Mza. I Lote. 10 Apv Resid Monte Azul"
+        }
+      },
+      "tipoMoneda": "PEN",
+      "mtoOperGravadas": 0.0,
+      "mtoIGV": 0,
+      "totalImpuestos": 0.0,
+      "valorVenta": 0.0,
+      "subTotal": 0.0,
+      "mtoImpVenta": 0.0,
+      "details": [],
+      "legends": [
+        {
+          "code": "1000",
+          "value": ""
+        }
+      ]
+    }', true);
   }
 
   /**
