@@ -11,8 +11,19 @@ namespace App\Controller\v1;
 
 use Luecano\NumeroALetras\NumeroALetras;
 use App\Service\DocumentRequestInterface;
+use Greenter\Model\Client\Client;
+use Greenter\Model\Company\Address;
+use Greenter\Model\Company\Company;
+use Greenter\Model\DocumentInterface;
+use Greenter\Model\Sale\Charge;
+use Greenter\Model\Sale\FormaPagos\FormaPagoContado;
 use Greenter\Model\Sale\Invoice;
+use Greenter\Model\Sale\Legend;
+use Greenter\Model\Sale\Note;
+use Greenter\Model\Sale\SaleDetail;
+use JMS\Serializer\SerializerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
@@ -25,21 +36,80 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 class OdooController extends AbstractController
 {
+  private $urlBase;
+  private $publicUrlBase;
   private $client;
   private $CURRENCY;
+  private $DOCUMENT_TYPE;
+  private $TIPO_OPERACION;
+  private $TIPO_IGV;
 
   private $dmask_json;
   private $mask_json;
 
-  public function __construct(HttpClientInterface $client)
-  {
+
+  private $jmsSerializer;
+  private $cliente;
+  private $empresa;
+  /**
+   * @var DocumentInterface
+   */
+  private $document;
+
+  public function __construct(
+    SerializerInterface $jmsSerializer,
+    HttpClientInterface $client
+  ) {
+    $this->jmsSerializer = $jmsSerializer;
+    $this->urlBase = "http://localhost/lycet/public/api/v1";
+    //$this->urlBase = "http://localhost:8000/api/v1";
+    $this->publicUrlBase = "http://142.93.206.123:8000";
     $this->client = $client;
     $this->CURRENCY = [
       1 => 'PEN',        # Soles
       2 => 'USD',        # Dollars
       3 => 'EUR',        # Euros
     ];
+    $this->DOCUMENT_TYPE = [
+      1 => '01',
+      2 => '03',
+      3 => '07',
+      4 => '08',
+    ];
 
+    $this->TIPO_OPERACION = [
+      1 => '0101', //'INTERNAL SALE',
+      2 => '0102', //'EXPORTATION',
+      3 => '0103', //'NON-DOMICILED',
+      4 => '0104', //'INTERNAL SALE - ADVANCES',
+      5 => '0105', //'ITINERANT SALE',
+      6 => '0106', //'GUIDE INVOICE',
+      7 => '0107', //'SALE PILADO RICE',
+      8 => '0108', //'INVOICE - PROOF OF PERCEPTION',
+      10 => '0110', //'INVOICE - SENDING GUIDE',
+      11 => '0111', //'INVOICE - CARRIER GUIDE',
+      12 => '', //'SALES TICKET - PROOF OF PERCEPTION',
+      13 => '0112', //'NATURAL PERSON DEDUCTIBLE EXPENSE',
+    ];
+
+    $this->TIPO_IGV = [
+      1 => "10",
+      2 => "11",
+      3 => "12",
+      4 => "13",
+      5 => "14",
+      6 => "15",
+      7 => "16",
+      8 => "20",
+      9 => "30",
+      10 => "31",
+      11 => "32",
+      12 => "33",
+      13 => "34",
+      14 => "35",
+      15 => "36",
+      16 => "40",
+    ];
     $this->dmask_json = json_decode('{
       "unidad": "",
       "cantidad": 0.0,
@@ -49,7 +119,7 @@ class OdooController extends AbstractController
       "mtoBaseIgv": 0.0,
       "porcentajeIgv": 0.0,
       "igv": 0.0,
-      "tipAfeIgv": "10",
+      "tipAfeIgv": "",
       "totalImpuestos": 0.0,
       "mtoPrecioUnitario": 0.0,
       "mtoValorVenta": 0.0
@@ -106,6 +176,36 @@ class OdooController extends AbstractController
     }', true);
   }
 
+  public function getDocument($type)
+  {
+    switch ($this->DOCUMENT_TYPE[$type]) {
+      case '01':
+        $d = new Invoice();
+        $d->setUblVersion("2.1");
+        $d->setTipoDoc('01');
+        break;
+      case '03':
+        $d = new Invoice();
+        $d->setUblVersion("2.1");
+        $d->setTipoDoc('03');
+        break;
+      case '07':
+        $d = new Note();
+        $d->setUblVersion("2.1");
+        $d->setTipoDoc('07');
+        break;
+      case '08':
+        $d = new Note();
+        $d->setUblVersion("2.1");
+        $d->setTipoDoc('08');
+        break;
+      default:
+        $d = null;
+        break;
+    }
+    return $d;
+  }
+
   /**
    * @Route("/send", methods={"POST"})
    *
@@ -115,87 +215,117 @@ class OdooController extends AbstractController
   {
     $enlace_pdf = "";
     $enlace_cdr = "";
-
+    $tz = new \DateTimeZone('America/Lima');
     $json_request = json_decode($request->getContent());
 
-    // convertir odoo -> lycet
-    $mask_json['tipoOperacion'] = '01' . str_pad($json_request->sunat_transaction, 2, "0", STR_PAD_LEFT);
-    $mask_json['serie'] = $json_request->serie;
-    $mask_json['correlativo'] = str_pad($json_request->numero, 8, "0", STR_PAD_LEFT);
-    $mask_json['fechaEmision'] = date("Y-m-d\T19:34:00-05:00", strtotime($json_request->fecha_de_emision));
+    $direccion = new Address(); // EMPRESA
+    $direccion
+      ->setUbigueo("150101")
+      ->setDepartamento("LIMA")
+      ->setProvincia("LIMA")
+      ->setDistrito("SAN MARTIN DE PORRES")
+      ->setDireccion("Cal. 8 Mza. I Lote. 10 Apv Resid Monte Azul");
 
-    $mask_json['tipoDoc'] = str_pad($json_request->tipo_de_comprobante, 2, "0", STR_PAD_LEFT);
-    $mask_json['compra'] = $json_request->orden_compra_servicio;
-    $mask_json['observacion'] = $json_request->observaciones;
+    $this->empresa = new Company();
+    $this->empresa->setRuc('20522718786')
+      ->setRazonSocial("PLACA MASS E.I.R.L.")
+      ->setNombreComercial("PLACA MASS")
+      ->setAddress($direccion);
 
-    if ($mask_json['observacion'] != "" and $json_request->numero_guia != "") {
-      $mask_json['observacion'] = $mask_json['observacion'] . " | Guias Remisión: " . $json_request->numero_guia;
-    } else if ($json_request->numero_guia != "") {
-      $mask_json['observacion'] = "Guias Remisión: " . $json_request->numero_guia;
-    }
+    $direccion = new Address(); // CLIENTE
+    $direccion->setDireccion($json_request->cliente_direccion)->setCodLocal(null);
 
-    $mask_json['client']['rznSocial'] = $json_request->cliente_denominacion;
-    $mask_json['client']['numDoc'] = $json_request->cliente_numero_de_documento;
-    $mask_json['client']['tipoDoc'] = $json_request->cliente_tipo_de_documento;
-    $mask_json['client']['address']['direccion'] = $json_request->cliente_direccion;
-    
-    $mask_json['tipoMoneda'] = $this->CURRENCY[$json_request->moneda];
-
-    $mask_json['mtoOperGravadas'] = $json_request->total_gravada;
-    $mask_json['mtoOperInafectas'] = $json_request->total_inafecta;
-    $mask_json['mtoOperExoneradas'] = $json_request->total_exonerada;
-    //$mask_json['mtoOperGratuitas'] = $json_request->total_gratuita;
-    //$mask_json['mtoIGVGratuitas'] = 0.0;
-    
-    $mask_json['mtoIGV'] = $json_request->total_igv;
-    $mask_json['totalImpuestos'] = $json_request->total_igv;
-    $mask_json['valorVenta'] = $json_request->total_gravada;
-    $mask_json['subTotal'] = $json_request->total;
-    $mask_json['mtoImpVenta'] = $json_request->total;
-
-    foreach ($json_request->items as $item) {
-      $dmask_json['unidad'] = $item->unidad_de_medida;
-      $dmask_json['cantidad'] = $item->cantidad;
-      $dmask_json['codProducto'] = $item->codigo;
-      $dmask_json['descripcion'] = $item->descripcion;
-      $dmask_json['mtoValorUnitario'] = round($item->valor_unitario, 4);
-      $dmask_json['mtoPrecioUnitario'] = round($item->precio_unitario, 4);
-      $dmask_json['mtoBaseIgv'] = round($item->subtotal, 2);
-      $dmask_json['mtoValorVenta'] = round($item->subtotal, 4);
-      $dmask_json['porcentajeIgv'] = round($json_request->porcentaje_de_igv, 2);
-      $dmask_json['igv'] = round($item->igv, 2);
-      $dmask_json['tipAfeIgv'] = $item->tipo_de_igv;
-      $dmask_json['totalImpuestos'] = round($item->igv, 4);
-      if ((float)$item->descuento > 0.0) {
-        $dmask_json['descuento'][] = array(
-          "codTipo" => "00",
-          "montoBase" => $item->cantidad * round($item->valor_unitario, 4),
-          "factor" => $item->descuento_porcentaje,
-          "monto" => $item->descuento,
-        );
-      }
-      $mask_json['details'][] = $dmask_json;
-    }
+    $this->cliente = new Client();
+    $this->cliente->setTipoDoc($json_request->cliente_tipo_de_documento)
+      ->setNumDoc($json_request->cliente_numero_de_documento)
+      ->setRznSocial($json_request->cliente_denominacion)
+      ->setAddress($direccion);
 
     $formatter = new NumeroALetras();
-    $mask_json['legends'][0]['value'] = $formatter->toInvoice($json_request->total, 2, strtoupper($json_request->moneda_texto));
+    $legend = new Legend();
+    $legend->setCode("1000")
+      ->setValue($formatter->toInvoice($json_request->total, 2, strtoupper($json_request->moneda_texto)));
 
-    // fin 
-    $data_json = json_encode($mask_json);
+    $this->document = $this->getDocument($json_request->tipo_de_comprobante);
+    $this->document->setTipoOperacion($this->TIPO_OPERACION[$json_request->sunat_transaction])
+      ->setSerie($json_request->serie)
+      ->setCorrelativo($json_request->numero)
+      ->setFechaEmision(new \DateTime($json_request->fecha_de_emision, $tz))
+      /*TODO: Modificar segun odoo*/
+      ->setFormaPago(new FormaPagoContado())
+      ->setClient($this->cliente)
+      ->setCompany($this->empresa)
+      ->setTipoMoneda($this->CURRENCY[$json_request->moneda])
+      ->setCompra(!empty($json_request->orden_compra_servicio) ? $json_request->orden_compra_servicio : null)
+      ->setObservacion(!empty($json_request->observaciones) ? $json_request->observaciones : null)
+      ->setLegends([$legend])
 
-    //var_dump($mask_json);
+      ->setMtoOperGravadas($json_request->total_gravada)
+      ->setMtoOperInafectas($json_request->total_inafecta)
+      ->setMtoOperExoneradas($json_request->total_exonerada)
+      //->setMtoOperGratuitas($json_request->total_gratuita)
+      // ->setMtoIGVGratuitas(!empty($json_request->total_gratuita) ? floatval($json_request->total_gratuita) / 1.18 : null)
+      ->setMtoIGV($json_request->total_igv)
+
+      ->setTotalImpuestos($json_request->total_igv)
+      ->setValorVenta($json_request->total_gravada)
+      ->setSubTotal($json_request->total)
+      ->setMtoImpVenta($json_request->total);
+
+    if ($json_request->observaciones != "" && $json_request->numero_guia != "") {
+      $this->document->setObservacion($json_request->observaciones . " | Guias Remisión: " . $json_request->numero_guia);
+    } else if ($json_request->numero_guia != "") {
+      $this->document->setObservacion("Guias Remisión: " . $json_request->numero_guia);
+    }
+
+    $detalles = [];
+    foreach ($json_request->items as $item) {
+      $detalle = new SaleDetail();
+      $descuento = null;
+      if ((float)$item->descuento > 0.0) {
+        $descuento = new Charge();
+        $descuento->setCodTipo("00")
+          ->setMontoBase($item->cantidad * round($item->valor_unitario, 4))
+          ->setFactor($item->descuento_porcentaje)
+          ->setMonto($item->descuento);
+      }
+
+      $detalle->setUnidad($item->unidad_de_medida)
+        ->setCantidad($item->cantidad)
+        ->setCodProducto($item->codigo)
+        ->setCodProdSunat($item->codigo_producto_sunat)
+        ->setDescripcion($item->descripcion)
+        ->setMtoValorUnitario(round($item->valor_unitario, 4))
+        ->setMtoValorGratuito(0)
+        ->setMtoPrecioUnitario(round($item->precio_unitario, 4))
+        ->setMtoBaseIgv(round($item->subtotal, 2))
+        ->setMtoValorVenta(round($item->subtotal, 4))
+        ->setPorcentajeIgv(round($json_request->porcentaje_de_igv, 2))
+        ->setIgv(round($item->igv, 2))
+        ->setIcbper(round($item->impuesto_bolsas, 2))
+        ->setTipAfeIgv($this->TIPO_IGV[$item->tipo_de_igv])
+        ->setTotalImpuestos(round($item->igv, 4))
+        ->setDescuentos(!is_null($descuento) ? [$descuento] : null);
+
+      array_push($detalles, $detalle);
+    }
+
+    $this->document->setDetails($detalles);
+
+    $json = $this->jmsSerializer->serialize($this->document, 'json');
+    //   return new JsonResponse($json, 200,  [], true);
 
     $response = $this->client->request(
       'POST',
-      'http://localhost:8000/api/v1/invoice/send?token=52271',
-      ['body' => $data_json],
+      $this->urlBase . '/invoice/send?token=123456',
+      ['body' => $json],
       ['headers' => [
         'Content-Type' => 'application/json',
       ]]
     );
 
     $json_response = json_decode($response->getContent());
-    $json_request = json_decode($data_json);
+    $json_request = json_decode($json);
 
     $enlace_pdf = "";
     $enlace_cdr = "";
@@ -205,15 +335,15 @@ class OdooController extends AbstractController
 
       $response_pdf = $this->client->request(
         'POST',
-        'http://localhost:8000/api/v1/invoice/pdf?token=52271',
-        ['body' => $data_json],
+        $this->urlBase . '/invoice/pdf?token=123456',
+        ['body' => $json],
         ['headers' => [
           'Content-Type' => 'application/json',
         ]]
       );
 
-      $enlace_pdf = 'http://142.93.206.123:8000/pdf/' . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.pdf';
-      $enlace_cdr = 'http://142.93.206.123:8000/cdr/' . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.zip';
+      $enlace_pdf = $this->publicUrlBase . "/pdf/" . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.pdf';
+      $enlace_cdr = $this->publicUrlBase . "/cdr/" . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.zip';
     }
 
     //print_r($json_response);
