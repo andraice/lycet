@@ -21,7 +21,7 @@
 									</td>
 									<td width="30%" valign="top" style="padding-left:0">
 										<div class="tabla_borde">
-                                            <br />
+											<br/>
 											<table width="100%" border="0" cellpadding="5" cellspacing="0">
 												<tbody>
 													<tr>
@@ -43,7 +43,7 @@
 													</tr>
 												</tbody>
 											</table>
-                                            <br />
+											<br/>
 										</div>
 									</td>
 								</tr>
@@ -51,7 +51,7 @@
 						</table>
 						<div class="tabla_borde">
 							{% set cl = doc.client %}
-							<table width="100%" border="0" cellpadding="0" cellspacing="0">
+							<table width="100%" border="0" cellpadding="5" cellspacing="0">
 								<tbody>
 									<tr>
 										<td width="60%" align="left">
@@ -60,6 +60,15 @@
 										<td width="40%" align="left">
 											<strong>{{ cl.tipoDoc|catalog('06') }}:</strong>
 											{{ cl.numDoc }}</td>
+									</tr>
+									<tr>
+										<td width="100%" align="left" colspan="2">
+											<strong>Dirección:
+											</strong>
+											{% if cl.address %}
+												{{ cl.address.direccion }}
+											{% endif %}
+										</td>
 									</tr>
 									<tr>
 										<td width="60%" align="left">
@@ -73,13 +82,6 @@
 												<br><br><strong>Fecha Vencimiento:
 												</strong>
 												{{ doc.fecVencimiento|date('d/m/Y') }}
-											{% endif %}
-										</td>
-										<td width="40%" align="left">
-											<strong>Dirección:
-											</strong>
-											{% if cl.address %}
-												{{ cl.address.direccion }}
 											{% endif %}
 										</td>
 									</tr>
@@ -182,15 +184,17 @@
 										</table>
 										<table width="100%" border="0" cellpadding="5" cellspacing="0">
 											<tbody>
-												{% if doc.observacion != '' %}
-													<tr class="border_top">
-														<td width="30%" style="font-size: 10px;">
-															OBSERVACIÓN:
-														</td>
-														<td width="70%" style="font-size: 10px;">
-															<p>{{ doc.observacion }}</p>
-														</td>
-													</tr>
+												{% if doc.observacion is defined %}
+													{% if doc.observacion  != '' %}
+														<tr class="border_top">
+															<td width="30%" style="font-size: 10px;">
+																OBSERVACIÓN:
+															</td>
+															<td width="70%" style="font-size: 10px;">
+																<p>{{ doc.observacion }}</p>
+															</td>
+														</tr>
+													{% endif %}
 												{% endif %}
 												<tr class="border_top">
 													<td width="30%" style="font-size: 10px;">
