@@ -43,10 +43,10 @@ class OdooController extends AbstractController
   private $DOCUMENT_TYPE;
   private $TIPO_OPERACION;
   private $TIPO_IGV;
+  private $TIPO_NOTACREDITO;
 
-  private $dmask_json;
-  private $mask_json;
-
+  private $_token = '123456';
+  private $_urlModel;
 
   private $jmsSerializer;
   private $cliente;
@@ -62,7 +62,6 @@ class OdooController extends AbstractController
   ) {
     $this->jmsSerializer = $jmsSerializer;
     $this->urlBase = "http://localhost/lycet/public/api/v1";
-    //$this->urlBase = "http://localhost:8000/api/v1";
     $this->publicUrlBase = "http://142.93.206.123:8000";
     $this->client = $client;
     $this->CURRENCY = [
@@ -110,70 +109,18 @@ class OdooController extends AbstractController
       15 => "36",
       16 => "40",
     ];
-    $this->dmask_json = json_decode('{
-      "unidad": "",
-      "cantidad": 0.0,
-      "codProducto": "",
-      "descripcion": "",
-      "mtoValorUnitario": 0.0,
-      "mtoBaseIgv": 0.0,
-      "porcentajeIgv": 0.0,
-      "igv": 0.0,
-      "tipAfeIgv": "",
-      "totalImpuestos": 0.0,
-      "mtoPrecioUnitario": 0.0,
-      "mtoValorVenta": 0.0
-    }', true);
 
-    $this->mask_json = json_decode('{
-      "ublVersion": "2.1",
-      "tipoOperacion": "0101",
-      "tipoDoc": "",
-      "serie": "",
-      "correlativo": "",
-      "fechaEmision": "",
-      "client": {
-        "tipoDoc": "",
-        "numDoc": "",
-        "rznSocial": "",
-        "address": {
-          "codigoPais": "PE",
-          "departamento": "LIMA",
-          "provincia": "LIMA",
-          "distrito": "-",
-          "urbanizacion": "-",
-          "direccion": ""
-        }
-      },
-      "company": {
-        "ruc": "20522718786",
-        "razonSocial": "PLACA MASS E.I.R.L.",
-        "nombreComercial": "PLACA MASS",
-        "address": {
-          "ubigueo": "150101",
-          "codigoPais": "PE",
-          "departamento": "LIMA",
-          "provincia": "LIMA",
-          "distrito": "SAN MARTIN DE PORRES",
-          "urbanizacion": "-",
-          "direccion": "Cal. 8 Mza. I Lote. 10 Apv Resid Monte Azul"
-        }
-      },
-      "tipoMoneda": "PEN",
-      "mtoOperGravadas": 0.0,
-      "mtoIGV": 0,
-      "totalImpuestos": 0.0,
-      "valorVenta": 0.0,
-      "subTotal": 0.0,
-      "mtoImpVenta": 0.0,
-      "details": [],
-      "legends": [
-        {
-          "code": "1000",
-          "value": ""
-        }
-      ]
-    }', true);
+    $this->TIPO_NOTACREDITO = [
+      1 => "Anulación de la operación",
+      2 => "Anulación por error en el RUC",
+      3 => "Corrección por error en la descripción",
+      4 => "Descuento global",
+      5 => "Descuento por ítem",
+      6 => "Devolución total",
+      7 => "Devolución por ítem",
+      8 => "Bonificación",
+      9 => "Disminución en el valor",
+    ];
   }
 
   public function getDocument($type)
@@ -247,36 +194,63 @@ class OdooController extends AbstractController
       ->setValue($formatter->toInvoice($json_request->total, 2, strtoupper($json_request->moneda_texto)));
 
     $this->document = $this->getDocument($json_request->tipo_de_comprobante);
-    $this->document->setTipoOperacion($this->TIPO_OPERACION[$json_request->sunat_transaction])
+    $this->document
       ->setSerie($json_request->serie)
       ->setCorrelativo($json_request->numero)
       ->setFechaEmision(new \DateTime($json_request->fecha_de_emision, $tz))
-      /*TODO: Modificar segun odoo*/
-      ->setFormaPago(new FormaPagoContado())
       ->setClient($this->cliente)
       ->setCompany($this->empresa)
       ->setTipoMoneda($this->CURRENCY[$json_request->moneda])
       ->setCompra(!empty($json_request->orden_compra_servicio) ? $json_request->orden_compra_servicio : null)
-      ->setObservacion(!empty($json_request->observaciones) ? $json_request->observaciones : null)
       ->setLegends([$legend])
 
       ->setMtoOperGravadas($json_request->total_gravada)
       ->setMtoOperInafectas($json_request->total_inafecta)
       ->setMtoOperExoneradas($json_request->total_exonerada)
-      //->setMtoOperGratuitas($json_request->total_gratuita)
-      // ->setMtoIGVGratuitas(!empty($json_request->total_gratuita) ? floatval($json_request->total_gratuita) / 1.18 : null)
+      ->setMtoOperGratuitas($json_request->total_gratuita)
+      ->setMtoIGVGratuitas(!empty($json_request->total_gratuita) ? floatval($json_request->total_gratuita) / 1.18 : null)
       ->setMtoIGV($json_request->total_igv)
 
       ->setTotalImpuestos($json_request->total_igv)
-      ->setValorVenta($json_request->total_gravada)
-      ->setSubTotal($json_request->total)
       ->setMtoImpVenta($json_request->total);
 
-    if ($json_request->observaciones != "" && $json_request->numero_guia != "") {
-      $this->document->setObservacion($json_request->observaciones . " | Guias Remisión: " . $json_request->numero_guia);
-    } else if ($json_request->numero_guia != "") {
-      $this->document->setObservacion("Guias Remisión: " . $json_request->numero_guia);
+    //FACTURAS Y BOLETAS
+    if ($this->document instanceof Invoice) {
+      $this->_urlModel = 'invoice';
+      $this->document->setTipoOperacion($this->TIPO_OPERACION[$json_request->sunat_transaction])
+        /*TODO: Modificar segun odoo*/
+        ->setFormaPago(new FormaPagoContado())
+        ->setValorVenta($json_request->total_gravada)
+        ->setSubTotal($json_request->total);
+
+      if ($json_request->observaciones != "" && $json_request->numero_guia != "") {
+        $this->document->setObservacion($json_request->observaciones . " | Guias Remisión: " . $json_request->numero_guia);
+      } else if ($json_request->numero_guia != "") {
+        $this->document->setObservacion("Guias Remisión: " . $json_request->numero_guia);
+      }
+    } elseif ($this->document instanceof Note) {
+      $this->_urlModel = 'note';
+      // NOTA CREDITO
+      if ($this->document->getTipoDoc() === "07") {
+        $this->document
+          ->setTipDocAfectado($this->DOCUMENT_TYPE[$json_request->documento_que_se_modifica_tipo])
+          ->setNumDocfectado(sprintf(
+            "%s-%s",
+            $json_request->documento_que_se_modifica_serie,
+            $json_request->documento_que_se_modifica_numero
+          ))
+          ->setCodMotivo(str_pad($json_request->tipo_de_nota_de_credito, 2, "0", STR_PAD_LEFT))
+          ->setDesMotivo($this->TIPO_NOTACREDITO[$json_request->tipo_de_nota_de_credito]);
+      }
+
+      // NOTA DEBITO
+      if ($this->document->getTipoDoc() === "08") {
+        die();
+      }
     }
+
+
+
 
     $detalles = [];
     foreach ($json_request->items as $item) {
@@ -313,11 +287,11 @@ class OdooController extends AbstractController
     $this->document->setDetails($detalles);
 
     $json = $this->jmsSerializer->serialize($this->document, 'json');
-    //   return new JsonResponse($json, 200,  [], true);
+   // return new JsonResponse($json, 200,  [], true);
 
     $response = $this->client->request(
       'POST',
-      $this->urlBase . '/invoice/send?token=123456',
+      $this->urlBase . '/' . $this->_urlModel . '/send?token=' . $this->_token,
       ['body' => $json],
       ['headers' => [
         'Content-Type' => 'application/json',
@@ -335,7 +309,7 @@ class OdooController extends AbstractController
 
       $response_pdf = $this->client->request(
         'POST',
-        $this->urlBase . '/invoice/pdf?token=123456',
+        $this->urlBase . '/' . $this->_urlModel . '/pdf?token=' . $this->_token,
         ['body' => $json],
         ['headers' => [
           'Content-Type' => 'application/json',
@@ -345,8 +319,6 @@ class OdooController extends AbstractController
       $enlace_pdf = $this->publicUrlBase . "/pdf/" . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.pdf';
       $enlace_cdr = $this->publicUrlBase . "/cdr/" . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.zip';
     }
-
-    //print_r($json_response);
 
     $odoo_response = [
       'enlace' => $enlace_pdf,
