@@ -28,6 +28,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Symfony\Contracts\HttpClient\ResponseInterface;
 
 /**
  * Class OdooController.
@@ -44,6 +45,7 @@ class OdooController extends AbstractController
   private $TIPO_OPERACION;
   private $TIPO_IGV;
   private $TIPO_NOTACREDITO;
+  private $TIPO_NOTADEBITO;
 
   private $_token = '123456';
   private $_urlModel;
@@ -111,6 +113,15 @@ class OdooController extends AbstractController
     ];
 
     $this->TIPO_NOTACREDITO = [
+      1 => "Intereses por mora",
+      2 => "Aumento en el valor",
+      3 => "Penalidades/ otros conceptos ",
+      11 => "Ajustes de operaciones de exportación",
+      12 => "Ajustes afectos al IVAP",
+    ];
+
+
+    $this->TIPO_NOTADEBITO = [
       1 => "Anulación de la operación",
       2 => "Anulación por error en el RUC",
       3 => "Corrección por error en la descripción",
@@ -162,141 +173,12 @@ class OdooController extends AbstractController
   {
     $enlace_pdf = "";
     $enlace_cdr = "";
-    $tz = new \DateTimeZone('America/Lima');
-    $json_request = json_decode($request->getContent());
 
-    $direccion = new Address(); // EMPRESA
-    $direccion
-      ->setUbigueo("150101")
-      ->setDepartamento("LIMA")
-      ->setProvincia("LIMA")
-      ->setDistrito("SAN MARTIN DE PORRES")
-      ->setDireccion("Cal. 8 Mza. I Lote. 10 Apv Resid Monte Azul");
-
-    $this->empresa = new Company();
-    $this->empresa->setRuc('20522718786')
-      ->setRazonSocial("PLACA MASS E.I.R.L.")
-      ->setNombreComercial("PLACA MASS")
-      ->setAddress($direccion);
-
-    $direccion = new Address(); // CLIENTE
-    $direccion->setDireccion($json_request->cliente_direccion)->setCodLocal(null);
-
-    $this->cliente = new Client();
-    $this->cliente->setTipoDoc($json_request->cliente_tipo_de_documento)
-      ->setNumDoc($json_request->cliente_numero_de_documento)
-      ->setRznSocial($json_request->cliente_denominacion)
-      ->setAddress($direccion);
-
-    $formatter = new NumeroALetras();
-    $legend = new Legend();
-    $legend->setCode("1000")
-      ->setValue($formatter->toInvoice($json_request->total, 2, strtoupper($json_request->moneda_texto)));
-
-    $this->document = $this->getDocument($json_request->tipo_de_comprobante);
-    $this->document
-      ->setSerie($json_request->serie)
-      ->setCorrelativo($json_request->numero)
-      ->setFechaEmision(new \DateTime($json_request->fecha_de_emision, $tz))
-      ->setClient($this->cliente)
-      ->setCompany($this->empresa)
-      ->setTipoMoneda($this->CURRENCY[$json_request->moneda])
-      ->setCompra(!empty($json_request->orden_compra_servicio) ? $json_request->orden_compra_servicio : null)
-      ->setLegends([$legend])
-
-      ->setMtoOperGravadas($json_request->total_gravada)
-      ->setMtoOperInafectas($json_request->total_inafecta)
-      ->setMtoOperExoneradas($json_request->total_exonerada)
-      ->setMtoOperGratuitas($json_request->total_gratuita)
-      ->setMtoIGVGratuitas(!empty($json_request->total_gratuita) ? floatval($json_request->total_gratuita) / 1.18 : null)
-      ->setMtoIGV($json_request->total_igv)
-
-      ->setTotalImpuestos($json_request->total_igv)
-      ->setMtoImpVenta($json_request->total);
-
-    //FACTURAS Y BOLETAS
-    if ($this->document instanceof Invoice) {
-      $this->_urlModel = 'invoice';
-      $this->document->setTipoOperacion($this->TIPO_OPERACION[$json_request->sunat_transaction])
-        /*TODO: Modificar segun odoo*/
-        ->setFormaPago(new FormaPagoContado())
-        ->setValorVenta($json_request->total_gravada)
-        ->setSubTotal($json_request->total);
-
-      if ($json_request->observaciones != "" && $json_request->numero_guia != "") {
-        $this->document->setObservacion($json_request->observaciones . " | Guias Remisión: " . $json_request->numero_guia);
-      } else if ($json_request->numero_guia != "") {
-        $this->document->setObservacion("Guias Remisión: " . $json_request->numero_guia);
-      }
-    } elseif ($this->document instanceof Note) {
-      $this->_urlModel = 'note';
-      // NOTA CREDITO
-      if ($this->document->getTipoDoc() === "07") {
-        $this->document
-          ->setTipDocAfectado($this->DOCUMENT_TYPE[$json_request->documento_que_se_modifica_tipo])
-          ->setNumDocfectado(sprintf(
-            "%s-%s",
-            $json_request->documento_que_se_modifica_serie,
-            $json_request->documento_que_se_modifica_numero
-          ))
-          ->setCodMotivo(str_pad($json_request->tipo_de_nota_de_credito, 2, "0", STR_PAD_LEFT))
-          ->setDesMotivo($this->TIPO_NOTACREDITO[$json_request->tipo_de_nota_de_credito]);
-      }
-
-      // NOTA DEBITO
-      if ($this->document->getTipoDoc() === "08") {
-        die();
-      }
-    }
-
-
-
-
-    $detalles = [];
-    foreach ($json_request->items as $item) {
-      $detalle = new SaleDetail();
-      $descuento = null;
-      if ((float)$item->descuento > 0.0) {
-        $descuento = new Charge();
-        $descuento->setCodTipo("00")
-          ->setMontoBase($item->cantidad * round($item->valor_unitario, 4))
-          ->setFactor($item->descuento_porcentaje)
-          ->setMonto($item->descuento);
-      }
-
-      $detalle->setUnidad($item->unidad_de_medida)
-        ->setCantidad($item->cantidad)
-        ->setCodProducto($item->codigo)
-        ->setCodProdSunat($item->codigo_producto_sunat)
-        ->setDescripcion($item->descripcion)
-        ->setMtoValorUnitario(round($item->valor_unitario, 4))
-        ->setMtoValorGratuito(0)
-        ->setMtoPrecioUnitario(round($item->precio_unitario, 4))
-        ->setMtoBaseIgv(round($item->subtotal, 2))
-        ->setMtoValorVenta(round($item->subtotal, 4))
-        ->setPorcentajeIgv(round($json_request->porcentaje_de_igv, 2))
-        ->setIgv(round($item->igv, 2))
-        ->setIcbper(round($item->impuesto_bolsas, 2))
-        ->setTipAfeIgv($this->TIPO_IGV[$item->tipo_de_igv])
-        ->setTotalImpuestos(round($item->igv, 4))
-        ->setDescuentos(!is_null($descuento) ? [$descuento] : null);
-
-      array_push($detalles, $detalle);
-    }
-
-    $this->document->setDetails($detalles);
+    $this->document = $this->generarComprobante($request->getContent());
 
     $json = $this->jmsSerializer->serialize($this->document, 'json');
-   // return new JsonResponse($json, 200,  [], true);
 
-    $response = $this->client->request(
-      'POST',
-      $this->urlBase . '/' . $this->_urlModel . '/send?token=' . $this->_token,
-      ['body' => $json],
-      ['headers' => [
-        'Content-Type' => 'application/json',
-      ]]
-    );
+    $response = $this->sendRequest($json, 'send');
 
     $json_response = json_decode($response->getContent());
     $json_request = json_decode($json);
@@ -307,14 +189,8 @@ class OdooController extends AbstractController
     if ($json_response->sunatResponse->success) {
       file_put_contents('./cdr/' . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.zip', base64_decode($json_response->sunatResponse->cdrZip));
 
-      $response_pdf = $this->client->request(
-        'POST',
-        $this->urlBase . '/' . $this->_urlModel . '/pdf?token=' . $this->_token,
-        ['body' => $json],
-        ['headers' => [
-          'Content-Type' => 'application/json',
-        ]]
-      );
+      $this->sendRequest($json, 'pdf');
+      $this->sendRequest($json, 'xml');
 
       $enlace_pdf = $this->publicUrlBase . "/pdf/" . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.pdf';
       $enlace_cdr = $this->publicUrlBase . "/cdr/" . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.zip';
@@ -349,5 +225,161 @@ class OdooController extends AbstractController
     $response->headers->set('Content-Type', 'application/json');
 
     return $response;
+  }
+
+  private function iniciarEmpresa(?String $ruc = '20522718786')
+  {
+    $direccion = new Address(); // EMPRESA
+    $direccion
+      ->setUbigueo("150101")
+      ->setDepartamento("LIMA")
+      ->setProvincia("LIMA")
+      ->setDistrito("SAN MARTIN DE PORRES")
+      ->setDireccion("Cal. 8 Mza. I Lote. 10 Apv Resid Monte Azul");
+
+    $this->empresa = new Company();
+    $this->empresa->setRuc($ruc)
+      ->setRazonSocial("PLACA MASS E.I.R.L.")
+      ->setNombreComercial("PLACA MASS")
+      ->setAddress($direccion);
+  }
+
+  private function generarComprobante(String $contentRequest): object
+  {
+    $json_request = json_decode($contentRequest);
+
+    $tz = new \DateTimeZone('America/Lima');
+
+    $this->iniciarEmpresa();
+
+    $direccion = new Address(); // CLIENTE
+    $direccion->setDireccion($json_request->cliente_direccion)->setCodLocal(null);
+
+    $this->cliente = new Client();
+    $this->cliente->setTipoDoc($json_request->cliente_tipo_de_documento)
+      ->setNumDoc($json_request->cliente_numero_de_documento)
+      ->setRznSocial($json_request->cliente_denominacion)
+      ->setAddress($direccion);
+
+    $formatter = new NumeroALetras();
+    $legend = new Legend();
+    $legend->setCode("1000")
+      ->setValue($formatter->toInvoice($json_request->total, 2, strtoupper($json_request->moneda_texto)));
+
+    $doc = $this->getDocument($json_request->tipo_de_comprobante);
+    $doc
+      ->setSerie($json_request->serie)
+      ->setCorrelativo($json_request->numero)
+      ->setFechaEmision(new \DateTime($json_request->fecha_de_emision, $tz))
+      ->setClient($this->cliente)
+      ->setCompany($this->empresa)
+      ->setTipoMoneda($this->CURRENCY[$json_request->moneda])
+      ->setCompra(!empty($json_request->orden_compra_servicio) ? $json_request->orden_compra_servicio : null)
+      ->setLegends([$legend])
+
+      ->setMtoOperGravadas($json_request->total_gravada)
+      ->setMtoOperInafectas($json_request->total_inafecta)
+      ->setMtoOperExoneradas($json_request->total_exonerada)
+      ->setMtoOperGratuitas($json_request->total_gratuita)
+      ->setMtoIGVGratuitas(!empty($json_request->total_gratuita) ? floatval($json_request->total_gratuita) / 1.18 : null)
+      ->setMtoIGV($json_request->total_igv)
+
+      ->setTotalImpuestos($json_request->total_igv)
+      ->setMtoImpVenta($json_request->total);
+
+    //FACTURAS Y BOLETAS
+    if ($doc instanceof Invoice) {
+      $this->_urlModel = 'invoice';
+      $doc->setTipoOperacion($this->TIPO_OPERACION[$json_request->sunat_transaction])
+        /*TODO: Modificar segun odoo*/
+        ->setFormaPago(new FormaPagoContado())
+        ->setValorVenta($json_request->total_gravada)
+        ->setSubTotal($json_request->total);
+
+      if ($json_request->observaciones != "" && $json_request->numero_guia != "") {
+        $doc->setObservacion($json_request->observaciones . " | Guias Remisión: " . $json_request->numero_guia);
+      } else if ($json_request->numero_guia != "") {
+        $doc->setObservacion("Guias Remisión: " . $json_request->numero_guia);
+      }
+    } elseif ($doc instanceof Note) {
+      $this->_urlModel = 'note';
+      // NOTA CREDITO
+      if ($doc->getTipoDoc() === "07") {
+        $doc
+          ->setTipDocAfectado($this->DOCUMENT_TYPE[$json_request->documento_que_se_modifica_tipo])
+          ->setNumDocfectado(sprintf(
+            "%s-%s",
+            $json_request->documento_que_se_modifica_serie,
+            $json_request->documento_que_se_modifica_numero
+          ))
+          ->setCodMotivo(str_pad($json_request->tipo_de_nota_de_credito, 2, "0", STR_PAD_LEFT))
+          ->setDesMotivo($this->TIPO_NOTACREDITO[$json_request->tipo_de_nota_de_credito]);
+      }
+
+      // NOTA DEBITO
+      if ($doc->getTipoDoc() === "08") {
+        $doc
+          ->setTipDocAfectado($this->DOCUMENT_TYPE[$json_request->documento_que_se_modifica_tipo])
+          ->setNumDocfectado(sprintf(
+            "%s-%s",
+            $json_request->documento_que_se_modifica_serie,
+            $json_request->documento_que_se_modifica_numero
+          ))
+          ->setCodMotivo(str_pad($json_request->tipo_de_nota_de_debito, 2, "0", STR_PAD_LEFT))
+          ->setDesMotivo($this->TIPO_NOTADEBITO[$json_request->tipo_de_nota_de_debito]);
+      }
+    }
+
+    $doc->setDetails($this->generarComprobanteDetalle($json_request->items, $json_request->porcentaje_de_igv));
+
+    return $doc;
+  }
+
+  private function generarComprobanteDetalle($json_items, $porcentaje): array
+  {
+    $detalles = [];
+    foreach ($json_items as $item) {
+      $detalle = new SaleDetail();
+      $descuento = null;
+      if ((float)$item->descuento > 0.0) {
+        $descuento = new Charge();
+        $descuento->setCodTipo("00")
+          ->setMontoBase($item->cantidad * round($item->valor_unitario, 4))
+          ->setFactor($item->descuento_porcentaje)
+          ->setMonto($item->descuento);
+      }
+
+      $detalle->setUnidad($item->unidad_de_medida)
+        ->setCantidad($item->cantidad)
+        ->setCodProducto($item->codigo)
+        ->setCodProdSunat($item->codigo_producto_sunat)
+        ->setDescripcion($item->descripcion)
+        ->setMtoValorUnitario(round($item->valor_unitario, 4))
+        ->setMtoValorGratuito(0)
+        ->setMtoPrecioUnitario(round($item->precio_unitario, 4))
+        ->setMtoBaseIgv(round($item->subtotal, 2))
+        ->setMtoValorVenta(round($item->subtotal, 4))
+        ->setPorcentajeIgv(round($porcentaje, 2))
+        ->setIgv(round($item->igv, 2))
+        ->setIcbper(round($item->impuesto_bolsas, 2))
+        ->setTipAfeIgv($this->TIPO_IGV[$item->tipo_de_igv])
+        ->setTotalImpuestos(round($item->igv, 4))
+        ->setDescuentos(!is_null($descuento) ? [$descuento] : null);
+
+      array_push($detalles, $detalle);
+    }
+    return $detalles;
+  }
+
+  private function sendRequest(String $json, String $action): ResponseInterface
+  {
+    return $this->client->request(
+      'POST',
+      $this->urlBase . '/' . $this->_urlModel . '/' . $action . '?token=' . $this->_token,
+      ['body' => $json],
+      ['headers' => [
+        'Content-Type' => 'application/json',
+      ]]
+    );
   }
 }

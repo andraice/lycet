@@ -118,6 +118,7 @@ class DocumentRequest implements DocumentRequestInterface
 
         $xml  = $see->getXmlSigned($document);
 
+        file_put_contents('./xml/' . $document->getName() . '.xml', $xml);
         return $this->file($xml, $document->getName() . '.xml', 'text/xml');
     }
 
