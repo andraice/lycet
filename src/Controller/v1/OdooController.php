@@ -130,7 +130,7 @@ class OdooController extends AbstractController
       16 => "40",
     ];
 
-    $this->TIPO_NOTACREDITO = [
+    $this->TIPO_NOTADEBITO = [
       1 => "Intereses por mora",
       2 => "Aumento en el valor",
       3 => "Penalidades/ otros conceptos ",
@@ -139,7 +139,7 @@ class OdooController extends AbstractController
     ];
 
 
-    $this->TIPO_NOTADEBITO = [
+    $this->TIPO_NOTACREDITO = [
       1 => "Anulación de la operación",
       2 => "Anulación por error en el RUC",
       3 => "Corrección por error en la descripción",
