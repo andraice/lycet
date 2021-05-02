@@ -29,6 +29,10 @@ use Symfony\Component\Filesystem\Filesystem;
  */
 class DocumentRequest implements DocumentRequestInterface
 {
+    /**
+     * @var ConfigProviderInterface
+     */
+    private $config;
 
     private $filesystem;
     /**
@@ -49,10 +53,12 @@ class DocumentRequest implements DocumentRequestInterface
     private $container;
 
     public function __construct(
+        ConfigProviderInterface $config,
         RequestStack $requestStack,
         RequestParserInterface $parser,
         ContainerInterface $container
     ) {
+        $this->config = $config;
         $this->requestStack = $requestStack;
         $this->parser = $parser;
         $this->container = $container;
@@ -95,7 +101,7 @@ class DocumentRequest implements DocumentRequestInterface
             'hash' => $this->GetHashFromXml($xml),
             'sunatResponse' => $result
         ];
-        
+
         return $this->json($data);
     }
 
@@ -140,8 +146,8 @@ class DocumentRequest implements DocumentRequestInterface
         $jsonCompanies = $this->getParameter('companies');
 
         $ruc = $document->getCompany()->getRuc();
-        if (empty($companies) && ($companies = json_decode($jsonCompanies, true)) && array_key_exists($ruc, $companies)) {
-            $logo = $this->getFile($companies[$ruc]['logo']);
+        if (empty($companies) && ($companies = json_decode($jsonCompanies, true)) && array_key_exists($ruc, $companies[$this->config->get('APP_ENV')])) {
+            $logo = $this->getFile($companies[$this->config->get('APP_ENV')][$ruc]['logo']);
         } else {
             $logo = $this->getParameter('logo');
         }
@@ -160,7 +166,7 @@ class DocumentRequest implements DocumentRequestInterface
         $pdf = $report->render($document, $parameters);
 
         file_put_contents('./pdf/' . $document->getName() . '.pdf', $pdf);
-        return $this->file($pdf, $document->getName().'.pdf', 'application/pdf');
+        return $this->file($pdf, $document->getName() . '.pdf', 'application/pdf');
     }
 
     /**

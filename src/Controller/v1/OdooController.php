@@ -9,8 +9,8 @@
 
 namespace App\Controller\v1;
 
+use App\Service\ConfigProviderInterface;
 use Luecano\NumeroALetras\NumeroALetras;
-use App\Service\DocumentRequestInterface;
 use Greenter\Model\Client\Client;
 use Greenter\Model\Company\Address;
 use Greenter\Model\Company\Company;
@@ -23,7 +23,6 @@ use Greenter\Model\Sale\Note;
 use Greenter\Model\Sale\SaleDetail;
 use JMS\Serializer\SerializerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
@@ -37,6 +36,11 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
  */
 class OdooController extends AbstractController
 {
+  /**
+   * @var ConfigProviderInterface
+   */
+  private $config;
+
   private $urlBase;
   private $publicUrlBase;
   private $client;
@@ -58,13 +62,27 @@ class OdooController extends AbstractController
    */
   private $document;
 
+  /**
+   * __construct
+   *
+   * @return void
+   */
   public function __construct(
+    ConfigProviderInterface $config,
     SerializerInterface $jmsSerializer,
     HttpClientInterface $client
   ) {
+    $this->config = $config;
     $this->jmsSerializer = $jmsSerializer;
-    $this->urlBase = "http://localhost/lycet/public/api/v1";
-    $this->publicUrlBase = "http://142.93.206.123:8000";
+
+    if ($this->config->get('APP_ENV') === 'prod') {
+      $this->urlBase = "http://localhost:8000/api/v1";
+      $this->publicUrlBase = "http://142.93.206.123:8000";
+    } else { // DEV
+      $this->urlBase = "http://localhost/lycet/public/api/v1";
+      $this->publicUrlBase = "http://localhost/lycet/public";
+    }
+
     $this->client = $client;
     $this->CURRENCY = [
       1 => 'PEN',        # Soles
@@ -183,6 +201,7 @@ class OdooController extends AbstractController
     $json_response = json_decode($response->getContent());
     $json_request = json_decode($json);
 
+    $enlace_xml = "";
     $enlace_pdf = "";
     $enlace_cdr = "";
 
@@ -192,6 +211,7 @@ class OdooController extends AbstractController
       $this->sendRequest($json, 'pdf');
       $this->sendRequest($json, 'xml');
 
+      $enlace_xml = $this->publicUrlBase . "/xml/" . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.xml';
       $enlace_pdf = $this->publicUrlBase . "/pdf/" . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.pdf';
       $enlace_cdr = $this->publicUrlBase . "/cdr/" . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.zip';
     }
@@ -200,7 +220,7 @@ class OdooController extends AbstractController
       'enlace' => $enlace_pdf,
       'enlace_del_cdr' => $enlace_cdr,
       'enlace_del_pdf' => $enlace_pdf,
-      'enlace_del_xml' => $enlace_cdr,
+      'enlace_del_xml' => $enlace_xml,
       'operacion' => 'generar_documento',
       'errors' => '',
       'aceptada_por_sunat' => $json_response->sunatResponse->success ? true : false,
@@ -227,21 +247,37 @@ class OdooController extends AbstractController
     return $response;
   }
 
-  private function iniciarEmpresa(?String $ruc = '20522718786')
+  private function iniciarEmpresa(String $id_empresa): Company
   {
-    $direccion = new Address(); // EMPRESA
-    $direccion
-      ->setUbigueo("150101")
-      ->setDepartamento("LIMA")
-      ->setProvincia("LIMA")
-      ->setDistrito("SAN MARTIN DE PORRES")
-      ->setDireccion("Cal. 8 Mza. I Lote. 10 Apv Resid Monte Azul");
-
-    $this->empresa = new Company();
-    $this->empresa->setRuc($ruc)
-      ->setRazonSocial("PLACA MASS E.I.R.L.")
-      ->setNombreComercial("PLACA MASS")
-      ->setAddress($direccion);
+    switch ($id_empresa) {
+      case '1':
+        return (new Company())
+          ->setRuc('20522718786')
+          ->setRazonSocial("PLACA MASS E.I.R.L.")
+          ->setNombreComercial("PLACA MASS")
+          ->setAddress((new Address())
+            ->setUbigueo("150101")
+            ->setDepartamento("LIMA")
+            ->setProvincia("LIMA")
+            ->setDistrito("SAN MARTIN DE PORRES")
+            ->setDireccion("Cal. 8 Mza. I Lote. 10 Apv Resid Monte Azul"));
+        break;
+      case '2':
+        return (new Company())
+          ->setRuc('20606473240')
+          ->setRazonSocial("SATA BPO S.A.C.")
+          ->setNombreComercial("SATA BPO")
+          ->setAddress((new Address())
+            ->setUbigueo("150141")
+            ->setDepartamento("LIMA")
+            ->setProvincia("LIMA")
+            ->setDistrito("COMAS")
+            ->setDireccion("Cal. Blasco Nuñez de Vela Nro. 308 A.H. el Carmen"));
+        break;
+      default:
+        return null;
+        break;
+    }
   }
 
   private function generarComprobante(String $contentRequest): object
@@ -250,21 +286,20 @@ class OdooController extends AbstractController
 
     $tz = new \DateTimeZone('America/Lima');
 
-    $this->iniciarEmpresa();
+    $this->empresa = $this->iniciarEmpresa($json_request->company_id);
 
-    $direccion = new Address(); // CLIENTE
-    $direccion->setDireccion($json_request->cliente_direccion)->setCodLocal(null);
-
+    // CLIENTE
     $this->cliente = new Client();
     $this->cliente->setTipoDoc($json_request->cliente_tipo_de_documento)
       ->setNumDoc($json_request->cliente_numero_de_documento)
       ->setRznSocial($json_request->cliente_denominacion)
-      ->setAddress($direccion);
+      ->setAddress((new Address())
+        ->setDireccion($json_request->cliente_direccion)
+        ->setCodLocal(null));
 
-    $formatter = new NumeroALetras();
-    $legend = new Legend();
-    $legend->setCode("1000")
-      ->setValue($formatter->toInvoice($json_request->total, 2, strtoupper($json_request->moneda_texto)));
+    $legend = (new Legend())
+      ->setCode("1000")
+      ->setValue((new NumeroALetras())->toInvoice($json_request->total, 2, strtoupper($json_request->moneda_texto)));
 
     $doc = $this->getDocument($json_request->tipo_de_comprobante);
     $doc

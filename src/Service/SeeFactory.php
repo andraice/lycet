@@ -64,11 +64,13 @@ class SeeFactory
 
         $companies = json_decode($jsonCompanies, true);
 
-        if (!array_key_exists($ruc, $companies)) {
+        // agregar environment
+        if (!array_key_exists($ruc, $companies[$this->config->get('APP_ENV')])) {
             return false;
         }
-
-        $config = $companies[$ruc];
+        
+        // agregar environment
+        $config = $companies[$this->config->get('APP_ENV')][$ruc];
         $this->see->setCredentials($config['SOL_USER'], $config['SOL_PASS']);
         $this->see->setCertificate($this->fileReader->getContents($config['certificate']));
         $this->see->setService($this->getUrlService($class));

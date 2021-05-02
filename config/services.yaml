@@ -72,6 +72,8 @@ services:
 
     App\Service\DocumentRequest:
         autowire: true
+        arguments:
+            - '@App\Service\EnvConfigProvider'
 
     Greenter\Validator\DocumentValidatorInterface: '@App\Service\AppDocumentValidator'
     Greenter\Report\ReportInterface:
