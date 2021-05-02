@@ -51,7 +51,7 @@ class OdooController extends AbstractController
   private $TIPO_NOTACREDITO;
   private $TIPO_NOTADEBITO;
 
-  private $_token = '123456';
+  private $_token;
   private $_urlModel;
 
   private $jmsSerializer;
@@ -76,9 +76,11 @@ class OdooController extends AbstractController
     $this->jmsSerializer = $jmsSerializer;
 
     if ($this->config->get('APP_ENV') === 'prod') {
+      $this->_token = '52271';
       $this->urlBase = "http://localhost:8000/api/v1";
       $this->publicUrlBase = "http://142.93.206.123:8000";
     } else { // DEV
+      $this->_token = '123456';
       $this->urlBase = "http://localhost/lycet/public/api/v1";
       $this->publicUrlBase = "http://localhost/lycet/public";
     }
