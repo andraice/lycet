@@ -32,6 +32,10 @@ services:
         resource: '../src/Controller/'
         tags: ['controller.service_arguments']
 
+    App\Controller\v1\OdooController:
+        arguments:
+            - '@App\Service\EnvConfigProvider'
+
     Psr\Container\ContainerInterface:
         alias: service_container
 

@@ -249,32 +249,32 @@ class OdooController extends AbstractController
     return $response;
   }
 
-  private function iniciarEmpresa(String $ruc): Company
+  private function iniciarEmpresa(String $id_empresa): Company
   {
-    switch ($ruc) {
-      case '20522718786':
+    switch ($id_empresa) {
+      case '1':
         return (new Company())
           ->setRuc('20522718786')
           ->setRazonSocial("PLACA MASS E.I.R.L.")
           ->setNombreComercial("PLACA MASS")
           ->setAddress((new Address())
-            ->setUbigueo("150135")
+            ->setUbigueo("150101")
             ->setDepartamento("LIMA")
             ->setProvincia("LIMA")
             ->setDistrito("SAN MARTIN DE PORRES")
             ->setDireccion("Cal. 8 Mza. I Lote. 10 Apv Resid Monte Azul"));
         break;
-      case '20606473240':
+      case '2':
         return (new Company())
           ->setRuc('20606473240')
           ->setRazonSocial("SATA BPO S.A.C.")
           ->setNombreComercial("SATA BPO")
           ->setAddress((new Address())
-            ->setUbigueo("150110")
+            ->setUbigueo("150141")
             ->setDepartamento("LIMA")
             ->setProvincia("LIMA")
             ->setDistrito("COMAS")
-            ->setDireccion("CAL. BLASCO NUÑEZ DE VELA NRO. 308 A.H. EL CARMEN"));
+            ->setDireccion("Cal. Blasco Nuñez de Vela Nro. 308 A.H. el Carmen"));
         break;
       default:
         return null;
@@ -288,7 +288,7 @@ class OdooController extends AbstractController
 
     $tz = new \DateTimeZone('America/Lima');
 
-    $this->empresa = $this->iniciarEmpresa($json_request->company_ruc);
+    $this->empresa = $this->iniciarEmpresa($json_request->company_id);
 
     // CLIENTE
     $this->cliente = new Client();
