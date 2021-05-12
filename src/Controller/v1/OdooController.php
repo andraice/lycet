@@ -339,7 +339,7 @@ class OdooController extends AbstractController
         $doc->setObservacion("Guias Remisión: " . $json_request->numero_guia);
       }
 
-      if (floatval($json_request->mtoOperGratuitas) != 0.0) {
+      if (floatval($json_request->total_gratuita) != 0.0) {
         $doc->setLegends([
           (new Legend())
             ->setCode('1002')
@@ -429,8 +429,6 @@ class OdooController extends AbstractController
 
   private function sendRequest(String $json, String $action): ResponseInterface
   {
-    echo $json;
-    exit(0);
     return $this->client->request(
       'POST',
       $this->urlBase . '/' . $this->_urlModel . '/' . $action . '?token=' . $this->_token,
