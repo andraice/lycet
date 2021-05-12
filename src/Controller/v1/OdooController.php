@@ -206,7 +206,7 @@ class OdooController extends AbstractController
     $enlace_xml = "";
     $enlace_pdf = "";
     $enlace_cdr = "";
-    
+
     if ($json_response->sunatResponse->success) {
       file_put_contents('./cdr/' . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.zip', base64_decode($json_response->sunatResponse->cdrZip));
 
@@ -318,7 +318,7 @@ class OdooController extends AbstractController
       ->setMtoOperInafectas($json_request->total_inafecta)
       ->setMtoOperExoneradas($json_request->total_exonerada)
       ->setMtoOperGratuitas($json_request->total_gratuita)
-      ->setMtoIGVGratuitas(!empty($json_request->total_gratuita) ? floatval($json_request->total_gratuita) / 1.18 : null)
+      ->setMtoIGVGratuitas(!empty($json_request->total_gratuita) ? floatval($json_request->total_gratuita) * 0.18 : null)
       ->setMtoIGV($json_request->total_igv)
 
       ->setTotalImpuestos($json_request->total_igv)
@@ -337,6 +337,14 @@ class OdooController extends AbstractController
         $doc->setObservacion($json_request->observaciones . " | Guias Remisión: " . $json_request->numero_guia);
       } else if ($json_request->numero_guia != "") {
         $doc->setObservacion("Guias Remisión: " . $json_request->numero_guia);
+      }
+
+      if (floatval($json_request->mtoOperGratuitas) != 0.0) {
+        $doc->setLegends([
+          (new Legend())
+            ->setCode('1002')
+            ->setValue('TRANSFERENCIA GRATUITA DE UN BIEN Y/O SERVICIO PRESTADO GRATUITAMENTE')
+        ]);
       }
     } elseif ($doc instanceof Note) {
       $this->_urlModel = 'note';
@@ -408,6 +416,7 @@ class OdooController extends AbstractController
       if ((float)$item->descuento == 0.0 && (float)$item->descuento_porcentaje == 100.0) {
         $detalle
           ->setIgv(round($item->subtotal, 4) * (round($porcentaje, 2) / 100.0))
+          ->setTotalImpuestos(round($item->subtotal, 4) * (round($porcentaje, 2) / 100.0))
           ->setMtoPrecioUnitario(0)
           ->setMtoValorUnitario(0)
           ->setMtoValorGratuito(round($item->valor_unitario, 4));
@@ -420,6 +429,8 @@ class OdooController extends AbstractController
 
   private function sendRequest(String $json, String $action): ResponseInterface
   {
+    echo $json;
+    exit(0);
     return $this->client->request(
       'POST',
       $this->urlBase . '/' . $this->_urlModel . '/' . $action . '?token=' . $this->_token,
