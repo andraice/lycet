@@ -38,7 +38,7 @@
 													</tr>
 													<tr>
 														<td align="center">
-															<span style="font-size:24px; font-weight: bold;">{{ doc.serie }}-{{ doc.correlativo }}</span>
+															<span style="font-size:24px; font-weight: bold;">{{ doc.serie }}-{{ "%'08.8s"|format(doc.correlativo) }}</span>
 														</td>
 													</tr>
 												</tbody>
@@ -54,73 +54,96 @@
 							<table width="100%" border="0" cellpadding="5" cellspacing="0">
 								<tbody>
 									<tr>
-										<td width="60%" align="left">
+										<td width="15%" align="left">
 											<strong>Razón Social:</strong>
-											{{ cl.rznSocial }}</td>
-										<td width="40%" align="left">
+										</td>
+										<td width="35%" align="left">
+											{{ cl.rznSocial|upper }}
+										</td>
+										<td width="15%" align="left">
 											<strong>{{ cl.tipoDoc|catalog('06') }}:</strong>
-											{{ cl.numDoc }}</td>
+										</td>
+										<td width="35%" align="left">
+											{{ cl.numDoc|upper }}
+										</td>
 									</tr>
 									<tr>
-										<td width="100%" align="left" colspan="2">
-											<strong>Dirección:
-											</strong>
+										<td width="15%" align="left">
+											<strong>Dirección:</strong>
+										</td>
+										<td width="85%" align="left" colspan="3">
 											{% if cl.address %}
 												{{ cl.address.direccion }}
 											{% endif %}
 										</td>
 									</tr>
 									<tr>
-										<td width="60%" align="left">
-											<strong>Fecha Emisión:
-											</strong>
+										<td width="15%" align="left">
+											<strong>Fecha Emisión:</strong>
+										</td>
+										<td width="35%" align="left">
 											{{ doc.fechaEmision|date('d/m/Y') }}
 											{% if doc.fechaEmision|date('H:i:s') != '00:00:00' %}
 												{{ doc.fechaEmision|date('H:i:s') }}
 											{% endif %}
+										</td>
+										<td width="15%" align="left">
 											{% if doc.fecVencimiento is defined and doc.fecVencimiento %}
-												<br><br><strong>Fecha Vencimiento:
-												</strong>
+												<strong>Fecha Vencimiento:</strong>
+											{% endif %}
+										</td>
+										<td width="35%" align="left">
+											{% if doc.fecVencimiento is defined and doc.fecVencimiento %}
 												{{ doc.fecVencimiento|date('d/m/Y') }}
 											{% endif %}
 										</td>
 									</tr>
 									{% if isNota %}
 										<tr>
-											<td width="60%" align="left">
-												<strong>Tipo Doc. Ref.:
-												</strong>
-												{{ doc.tipDocAfectado|catalog('01') }}</td>
-											<td width="40%" align="left">
-												<strong>Documento Ref.:
-												</strong>
-												{{ doc.numDocfectado }}</td>
+											<td width="15%" align="left">
+												<strong>Tipo Doc. Ref.:</strong>
+											</td>
+											<td width="35%" align="left">
+												{{ doc.tipDocAfectado|catalog('01') }}
+											</td>
+											<td width="15%" align="left">
+												<strong>Documento Ref.:</strong>
+											</td>
+											<td width="35%" align="left">
+												{{ doc.numDocfectado }}
+											</td>
 										</tr>
 									{% endif %}
 									<tr>
-										<td width="60%" align="left">
-											<strong>Tipo Moneda:
-											</strong>
+										<td width="15%" align="left">
+											<strong>Tipo Moneda:</strong>
+										</td>
+										<td width="35%" align="left">
 											{{ doc.tipoMoneda|catalog('021') }}
 										</td>
-										<td width="40%" align="left">
+										<td width="15%" align="left">
 											{% if doc.compra is defined and doc.compra %}
-												<strong>O/C:
-												</strong>
+												<strong>O/C:</strong>
+											{% endif %}
+										</td>
+										<td width="35%" align="left">
+											{% if doc.compra is defined and doc.compra %}
 												{{ doc.compra }}
 											{% endif %}
 										</td>
 									</tr>
 									{% if doc.guias %}
 										<tr>
-											<td width="60%" align="left">
-												<strong>Guias:
-												</strong>
+											<td width="15%" align="left">
+												<strong>Guias:</strong>
+											</td>
+											<td width="35%" align="left">
 												{% for guia in doc.guias %}
 													{{ guia.nroDoc }}&nbsp;&nbsp;
 												{% endfor %}
 											</td>
-											<td width="40%"></td>
+											<td width="15%"></td>
+											<td width="35%"></td>
 										</tr>
 									{% endif %}
 								</tbody>
@@ -131,31 +154,54 @@
 							<table width="100%" border="0" cellpadding="5" cellspacing="0">
 								<tbody>
 									<tr>
-										<td align="center" class="bold">Cantidad</td>
-										<td align="center" class="bold">Código</td>
-										<td align="center" class="bold">Descripción</td>
-										<td align="center" class="bold">Valor Unitario</td>
-										<td align="center" class="bold">Valor Total</td>
+										<td align="center" class="bold">Cant.</td>
+										<td align="center" class="bold">UDM</td>
+										<td align="center" class="bold">Codigo / Descripción</td>
+										<td align="right" class="bold">V/U</td>
+										<td align="right" class="bold">P/U</td>
+										<td align="right" class="bold">Desc. %</td>
+										<td align="right" class="bold">Importe</td>
 									</tr>
 									{% for det in doc.details %}
 										<tr class="border_top">
 											<td align="center">
 												{{ det.cantidad|n_format }}
+											</td>
+											<td align="center">
 												{{ det.unidad }}
 											</td>
-											<td align="center">
-												{{ det.codProducto }}
+											<td align="left" width="300px">
+												{{ det.codProducto }}<br>
+												<span>{{ det.descripcion }}</span>
 											</td>
-											<td align="center" width="300px">
-												<span>{{ det.descripcion }}</span><br>
-											</td>
-											<td align="center">
+											<td align="right">
 												{{ moneda }}
-												{{ det.mtoValorUnitario|n_format }}
+												{% if det.mtoValorGratuito %}
+													{{ det.mtoValorGratuito|n_format }}
+												{% else %}
+													{{ det.mtoValorUnitario|n_format }}
+												{% endif %}
 											</td>
-											<td align="center">
+											<td align="right">
 												{{ moneda }}
-												{{ det.mtoValorVenta|n_format }}
+												{{ det.mtoPrecioUnitario|n_format }}
+											</td>
+											<td align="right">
+												{% if det.descuentos|length %}
+													{{ det.descuentos.0.factor|n_format }}%
+												{% elseif det.mtoValorGratuito %}
+													100%
+												{% else %}
+													0%
+												{% endif %}
+											</td>
+											<td align="right">
+												{{ moneda }}
+												{% if det.mtoValorGratuito %}
+													{{ (0)|n_format }}
+												{% else %}
+													{{ (det.mtoValorVenta)|n_format }}
+												{% endif %}
 											</td>
 										</tr>
 									{% endfor %}
@@ -165,7 +211,7 @@
 						<table width="100%" border="0" cellpadding="0" cellspacing="0">
 							<tbody>
 								<tr>
-									<td width="50%" valign="top">
+									<td width="65%" valign="top">
 										<table width="100%" border="0" cellpadding="5" cellspacing="0">
 											<tbody>
 												<tr>
@@ -173,7 +219,8 @@
 														<br>
 														<br>
 														<span style="font-family:Tahoma, Geneva, sans-serif; font-size:12px" text-align="center">
-															<strong>{{ legend(doc.legends, '1000')  }}</strong>
+															<strong>IMPORTE EN LETRAS:
+																{{ legend(doc.legends, '1000')  }}</strong>
 														</span>
 														<br>
 														<br>
@@ -184,6 +231,18 @@
 										</table>
 										<table width="100%" border="0" cellpadding="5" cellspacing="0">
 											<tbody>
+												{% if doc.formaPago is defined %}
+													{% if doc.formaPago.tipo  != '' %}
+														<tr class="border_top">
+															<td width="30%" style="font-size: 10px;">
+																CONDICIÓN DE PAGO:
+															</td>
+															<td width="70%" style="font-size: 10px;">
+																<p>{{ doc.formaPago.tipo }}</p>
+															</td>
+														</tr>
+													{% endif %}
+												{% endif %}
 												{% if doc.observacion is defined %}
 													{% if doc.observacion  != '' %}
 														<tr class="border_top">
@@ -267,7 +326,7 @@
 											</table>
 										{% endif %}
 									</td>
-									<td width="50%" valign="top">
+									<td width="35%" valign="top">
 										<br>
 										<table width="100%" border="0" cellpadding="0" cellspacing="0" class="table table-valores-totales">
 											<tbody>
@@ -315,9 +374,20 @@
 														</td>
 													</tr>
 												{% endif %}
+												{% if doc.mtoOperGratuitas %}
+													<tr class="border_bottom">
+														<td align="right">
+															<strong>Op. Gratuitas:</strong>
+														</td>
+														<td width="120" align="right">
+															<span>{{ moneda }}
+																{{ doc.mtoOperGratuitas|n_format }}</span>
+														</td>
+													</tr>
+												{% endif %}
 												<tr>
 													<td align="right">
-														<strong>I.G.V.
+														<strong>IGV (18%)
 															{% if params.user.numIGV is defined %}
 																{{ params.user.numIGV }}%
 															{% endif %}:</strong>
@@ -330,7 +400,7 @@
 												{% if doc.mtoISC %}
 													<tr>
 														<td align="right">
-															<strong>I.S.C.:</strong>
+															<strong>ISC:</strong>
 														</td>
 														<td width="120" align="right">
 															<span>{{ moneda }}
@@ -352,7 +422,7 @@
 												{% if doc.icbper %}
 													<tr>
 														<td align="right">
-															<strong>I.C.B.P.E.R.:</strong>
+															<strong>ICBPER:</strong>
 														</td>
 														<td width="120" align="right">
 															<span>{{ moneda }}
@@ -373,7 +443,7 @@
 												{% endif %}
 												<tr>
 													<td align="right">
-														<strong>Precio Venta:</strong>
+														<strong>TOTAL:</strong>
 													</td>
 													<td width="120" align="right">
 														<span id="ride-importeTotal" class="ride-importeTotal">{{ moneda }}

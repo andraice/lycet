@@ -340,11 +340,11 @@ class OdooController extends AbstractController
       }
 
       if (floatval($json_request->total_gratuita) != 0.0) {
-        $doc->setLegends([
-          (new Legend())
+        $doc->setLegends(array_merge($doc->getLegends(),
+          [(new Legend())
             ->setCode('1002')
-            ->setValue('TRANSFERENCIA GRATUITA DE UN BIEN Y/O SERVICIO PRESTADO GRATUITAMENTE')
-        ]);
+            ->setValue('TRANSFERENCIA GRATUITA DE UN BIEN Y/O SERVICIO PRESTADO GRATUITAMENTE')]
+        ));
       }
     } elseif ($doc instanceof Note) {
       $this->_urlModel = 'note';
@@ -417,7 +417,7 @@ class OdooController extends AbstractController
         $detalle
           ->setIgv(round($item->subtotal, 4) * (round($porcentaje, 2) / 100.0))
           ->setTotalImpuestos(round($item->subtotal, 4) * (round($porcentaje, 2) / 100.0))
-          ->setMtoPrecioUnitario(0)
+          //->setMtoPrecioUnitario(0)
           ->setMtoValorUnitario(0)
           ->setMtoValorGratuito(round($item->valor_unitario, 4));
       }
