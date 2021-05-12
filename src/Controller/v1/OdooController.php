@@ -379,6 +379,7 @@ class OdooController extends AbstractController
       $detalle = new SaleDetail();
       $descuento = null;
       if ((float)$item->descuento > 0.0) {
+
         $descuento = new Charge();
         $descuento->setCodTipo("00")
           ->setMontoBase($item->cantidad * round($item->valor_unitario, 4))
@@ -402,6 +403,15 @@ class OdooController extends AbstractController
         ->setTipAfeIgv($this->TIPO_IGV[$item->tipo_de_igv])
         ->setTotalImpuestos(round($item->igv, 4))
         ->setDescuentos(!is_null($descuento) ? [$descuento] : null);
+
+
+      if ((float)$item->descuento == 0.0 && (float)$item->descuento_porcentaje == 100.0) {
+        $detalle
+          ->setIgv(round($item->subtotal, 4) * (round($porcentaje, 2) / 100.0))
+          ->setMtoPrecioUnitario(0)
+          ->setMtoValorUnitario(0)
+          ->setMtoValorGratuito(round($item->valor_unitario, 4));
+      }
 
       array_push($detalles, $detalle);
     }
