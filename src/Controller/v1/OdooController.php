@@ -206,7 +206,7 @@ class OdooController extends AbstractController
     $enlace_xml = "";
     $enlace_pdf = "";
     $enlace_cdr = "";
-
+    
     if ($json_response->sunatResponse->success) {
       file_put_contents('./cdr/' . $json_request->company->ruc . '-' . $json_request->tipoDoc . '-' . $json_request->serie . '-' . $json_request->correlativo . '.zip', base64_decode($json_response->sunatResponse->cdrZip));
 
@@ -249,32 +249,32 @@ class OdooController extends AbstractController
     return $response;
   }
 
-  private function iniciarEmpresa(String $id_empresa): Company
+  private function iniciarEmpresa(String $ruc): Company
   {
-    switch ($id_empresa) {
-      case '1':
+    switch ($ruc) {
+      case '20522718786':
         return (new Company())
           ->setRuc('20522718786')
           ->setRazonSocial("PLACA MASS E.I.R.L.")
           ->setNombreComercial("PLACA MASS")
           ->setAddress((new Address())
-            ->setUbigueo("150101")
+            ->setUbigueo("150135")
             ->setDepartamento("LIMA")
             ->setProvincia("LIMA")
             ->setDistrito("SAN MARTIN DE PORRES")
             ->setDireccion("Cal. 8 Mza. I Lote. 10 Apv Resid Monte Azul"));
         break;
-      case '2':
+      case '20606473240':
         return (new Company())
           ->setRuc('20606473240')
           ->setRazonSocial("SATA BPO S.A.C.")
           ->setNombreComercial("SATA BPO")
           ->setAddress((new Address())
-            ->setUbigueo("150141")
+            ->setUbigueo("150110")
             ->setDepartamento("LIMA")
             ->setProvincia("LIMA")
             ->setDistrito("COMAS")
-            ->setDireccion("Cal. Blasco Nuñez de Vela Nro. 308 A.H. el Carmen"));
+            ->setDireccion("CAL. BLASCO NUÑEZ DE VELA NRO. 308 A.H. EL CARMEN"));
         break;
       default:
         return null;
@@ -288,7 +288,7 @@ class OdooController extends AbstractController
 
     $tz = new \DateTimeZone('America/Lima');
 
-    $this->empresa = $this->iniciarEmpresa($json_request->company_id);
+    $this->empresa = $this->iniciarEmpresa($json_request->company_ruc);
 
     // CLIENTE
     $this->cliente = new Client();
