@@ -231,7 +231,8 @@
 										</table>
 										<table width="100%" border="0" cellpadding="5" cellspacing="0">
 											<tbody>
-												{% if doc.formaPago is defined %}
+												{% if doc.formaPago is defined and doc.formaPago is not null %}
+												{% if doc.formaPago.tipo is defined and doc.formaPago.tipo is not null %}
 													{% if doc.formaPago.tipo  != '' %}
 														<tr class="border_top">
 															<td width="30%" style="font-size: 10px;">
@@ -242,6 +243,7 @@
 															</td>
 														</tr>
 													{% endif %}
+												{% endif %}
 												{% endif %}
 												{% if doc.observacion is defined %}
 													{% if doc.observacion  != '' %}
